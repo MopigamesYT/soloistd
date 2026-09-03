@@ -1,0 +1,7 @@
+/soloistd
+*.test
+coverage.out
+/aur/pkg/
+/aur/src/
+/aur/*.pkg.tar.*
+/aur/*.log
