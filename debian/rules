@@ -5,7 +5,10 @@ include /usr/share/dpkg/buildflags.mk
 
 # Build with the vendored dependencies and the distribution toolchain only;
 # the build must never reach the network for a module or a toolchain.
-export GOFLAGS := -mod=vendor -trimpath -buildmode=pie
+# VCS stamping is off because a package build must produce the same binary
+# from a source package as from a git checkout, and because the checkout is
+# often not owned by the build user, which makes git refuse to answer at all.
+export GOFLAGS := -mod=vendor -trimpath -buildmode=pie -buildvcs=false
 export GOTOOLCHAIN := local
 export GOPATH := $(CURDIR)/.gopath
 export GOCACHE := $(CURDIR)/.gocache
