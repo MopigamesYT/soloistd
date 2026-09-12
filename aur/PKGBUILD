@@ -12,7 +12,7 @@ depends=('glibc' 'systemd')
 makedepends=('go')
 options=('!debug')
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('5e9ed72b4cffa21bdb81ae7de2b5606a9e8d8494222d4b1fb4fb0fdf77b21e5b')
+sha256sums=('69ee2e48fb4f01d0518418a2baecfb8bb87bf0c2de83bc6db94ed4074c7f054f')
 
 prepare() {
   cd "${pkgname}-${pkgver}"
