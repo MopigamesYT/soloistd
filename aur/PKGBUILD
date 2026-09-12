@@ -37,6 +37,7 @@ check() {
 package() {
   cd "${pkgname}-${pkgver}"
   install -Dm755 build/soloistd "${pkgdir}/usr/bin/soloistd"
+  install -Dm644 doc/soloistd.1 "${pkgdir}/usr/share/man/man1/soloistd.1"
   install -Dm644 README.md "${pkgdir}/usr/share/doc/soloistd/README.md"
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/soloistd/LICENSE"
 }

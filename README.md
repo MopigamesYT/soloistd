@@ -4,6 +4,8 @@
 
 ## Install
 
+Every tagged release carries a `.deb` and an `.rpm` built by CI. Download the one matching the distribution and install it with `apt install ./soloistd_*.deb` or `dnf install ./soloistd-*.rpm`.
+
 ### Arch Linux (AUR)
 
 ```sh
@@ -11,6 +13,29 @@ paru -S soloistd
 ```
 
 Or build the AUR recipe manually with `makepkg -si`.
+
+### Debian and Ubuntu
+
+The packaging lives in `debian/`. Build it from a checkout on Debian 13 (trixie) or newer, or on Ubuntu 25.04 or newer, because the build needs Go 1.24:
+
+```sh
+sudo apt install build-essential debhelper dpkg-dev golang-go
+dpkg-buildpackage -us -uc -b
+sudo apt install ../soloistd_*.deb
+```
+
+### Fedora
+
+The spec file lives in `fedora/`. Build it from a checkout:
+
+```sh
+sudo dnf install rpm-build rpmdevtools golang gcc
+rpmdev-setuptree
+git archive --format=tar.gz --prefix=soloistd-0.2.0/ \
+  -o ~/rpmbuild/SOURCES/soloistd-0.2.0.tar.gz HEAD
+rpmbuild -bb fedora/soloistd.spec
+sudo dnf install ~/rpmbuild/RPMS/*/soloistd-*.rpm
+```
 
 ### From source
 
@@ -81,6 +106,17 @@ Additional documented Soloist options can be set directly in `config.json`: `dat
 `soloistd` compares the official archive's CDN metadata at daemon startup and every six hours. When the archive changes, it downloads the stable archive matching the current Linux architecture from `soloist-builds.spotifycdn.com`, extracts and executes `soloist --version` as validation, atomically replaces its user-owned managed executable, and gracefully restarts Soloist. Failed proactive checks do not interrupt playback.
 
 Spotify documents daemon exit status `10` as “build expired.” This remains an independent fallback: `soloistd` unconditionally downloads the current build and restarts whenever Soloist reports status `10`, even if the proactive metadata check failed. It supports `x86_64`, AArch64, and ARMv7.
+
+## Packaging and CI
+
+| Target | Recipe |
+| --- | --- |
+| Arch Linux | `aur/PKGBUILD` |
+| Debian and Ubuntu | `debian/` |
+| Fedora | `fedora/soloistd.spec` |
+| Manual page | `doc/soloistd.1` |
+
+GitHub Actions builds and tests the program, then builds, lints, installs, and smoke-tests both the `.deb` and the `.rpm` on every push and pull request. Pushing a `v*` tag attaches those packages to the matching GitHub release. `scripts/check-versions.sh` fails the build when the version in `main.go` and the versions in the packaging recipes disagree.
 
 ## License
 

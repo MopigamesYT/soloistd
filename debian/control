@@ -1,0 +1,28 @@
+Source: soloistd
+Section: sound
+Priority: optional
+Maintainer: Margot <mopigames@proton.me>
+Build-Depends:
+ debhelper-compat (= 13),
+ golang-go (>= 2:1.24~),
+Standards-Version: 4.7.0
+Homepage: https://github.com/MopigamesYT/soloistd
+Vcs-Git: https://github.com/MopigamesYT/soloistd.git
+Vcs-Browser: https://github.com/MopigamesYT/soloistd
+Rules-Requires-Root: no
+
+Package: soloistd
+Architecture: amd64 arm64 armhf
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+Recommends: systemd
+Description: Manage Spotify Soloist as a user service with automatic updates
+ soloistd is a small supervisor for Spotify Soloist. It keeps the Soloist API
+ key outside the systemd unit, runs Soloist as a systemd user service, and
+ proactively checks the official CDN for new builds.
+ .
+ When a new official build appears, soloistd downloads and validates it,
+ atomically replaces its user-owned copy of the Soloist executable, and
+ restarts Soloist gracefully. The documented "build expired" exit status is
+ retained as an independent recovery path.

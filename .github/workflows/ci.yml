@@ -1,0 +1,146 @@
+# SPDX-License-Identifier: 0BSD
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l . | grep -v '^vendor/' || true)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needs to run on:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet -mod=vendor ./...
+
+      - name: Test
+        run: go test -mod=vendor ./...
+
+      - name: Build
+        run: go build -mod=vendor -trimpath -o soloistd .
+
+      - name: Check packaging versions
+        run: ./scripts/check-versions.sh
+
+  deb:
+    name: Debian package
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential ca-certificates debhelper dpkg-dev git golang-go lintian
+
+      - uses: actions/checkout@v4
+
+      - name: Build package
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          mv ../*.deb ../*.buildinfo ../*.changes dist/
+          ls -l dist
+
+      - name: Lint package
+        continue-on-error: true
+        run: lintian --tag-display-limit 0 dist/*.changes
+
+      - name: Smoke test
+        run: |
+          dpkg -i dist/soloistd_*.deb
+          soloistd version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debian-packages
+          path: dist/*.deb
+          if-no-files-found: error
+
+  rpm:
+    name: Fedora package
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Install build dependencies
+        run: dnf -y install rpm-build rpmdevtools rpmlint golang gcc git
+
+      - uses: actions/checkout@v4
+
+      - name: Build package
+        run: |
+          git config --global --add safe.directory "$PWD"
+          version=$(rpmspec -q --srpm --qf '%{version}\n' fedora/soloistd.spec)
+          rpmdev-setuptree
+          git archive --format=tar.gz --prefix="soloistd-${version}/" \
+            -o "$HOME/rpmbuild/SOURCES/soloistd-${version}.tar.gz" HEAD
+          rpmbuild -bb fedora/soloistd.spec
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          find "$HOME/rpmbuild/RPMS" -name '*.rpm' -exec mv {} dist/ \;
+          ls -l dist
+
+      - name: Lint package
+        continue-on-error: true
+        run: rpmlint dist/*.rpm fedora/soloistd.spec
+
+      - name: Smoke test
+        run: |
+          dnf -y install ./dist/soloistd-[0-9]*.rpm
+          soloistd version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fedora-packages
+          path: dist/*.rpm
+          if-no-files-found: error
+
+  release:
+    name: Attach packages to the release
+    needs: [test, deb, rpm]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" dist/soloistd_*.deb dist/soloistd-[0-9]*.rpm --clobber

@@ -1,7 +1,16 @@
 /soloistd
 *.test
 coverage.out
+/dist/
+/.gocache/
+/.gopath/
 /aur/pkg/
 /aur/src/
 /aur/*.pkg.tar.*
 /aur/*.log
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/soloistd/
+/debian/soloistd.substvars
+/debian/*.debhelper.log

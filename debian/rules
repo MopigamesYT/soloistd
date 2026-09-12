@@ -1,0 +1,37 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: 0BSD
+
+include /usr/share/dpkg/buildflags.mk
+
+# Build with the vendored dependencies and the distribution toolchain only;
+# the build must never reach the network for a module or a toolchain.
+export GOFLAGS := -mod=vendor -trimpath -buildmode=pie
+export GOTOOLCHAIN := local
+export GOPATH := $(CURDIR)/.gopath
+export GOCACHE := $(CURDIR)/.gocache
+export GOMODCACHE := $(CURDIR)/.gopath/pkg/mod
+export CGO_ENABLED := 1
+export CGO_CPPFLAGS := $(CPPFLAGS)
+export CGO_CFLAGS := $(CFLAGS)
+export CGO_CXXFLAGS := $(CXXFLAGS)
+export CGO_LDFLAGS := $(LDFLAGS)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go build -ldflags="-linkmode=external -extldflags '$(LDFLAGS)'" -o soloistd .
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	go test ./...
+endif
+
+override_dh_auto_install:
+	install -D -m 0755 soloistd debian/soloistd/usr/bin/soloistd
+
+override_dh_auto_clean:
+	rm -rf soloistd .gopath .gocache
+
+# dwz cannot process the DWARF the Go linker emits.
+override_dh_dwz:

@@ -1,0 +1,5 @@
+soloistd (0.2.0-1) unstable; urgency=medium
+
+  * Initial Debian packaging.
+
+ -- Margot <mopigames@proton.me>  Sat, 12 Sep 2026 14:27:48 +0200
