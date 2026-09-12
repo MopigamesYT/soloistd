@@ -4,7 +4,7 @@
 
 ## Install
 
-Every tagged release carries a `.deb` and an `.rpm` built by CI. Download the one matching the distribution and install it with `apt install ./soloistd_*.deb` or `dnf install ./soloistd-*.rpm`.
+Every tagged release carries a statically linked `soloistd-linux-amd64` binary, a `.deb`, and an `.rpm`, all built by CI. Install the package matching the distribution with `apt install ./soloistd_*.deb` or `dnf install ./soloistd-*.rpm`, or just put the static binary on your `PATH`.
 
 ### Arch Linux (AUR)
 
@@ -116,7 +116,7 @@ Spotify documents daemon exit status `10` as “build expired.” This remains a
 | Fedora | `fedora/soloistd.spec` |
 | Manual page | `doc/soloistd.1` |
 
-GitHub Actions builds and tests the program, then builds, lints, installs, and smoke-tests both the `.deb` and the `.rpm` on every push and pull request. Pushing a `v*` tag attaches those packages to the matching GitHub release. `scripts/check-versions.sh` fails the build when the version in `main.go` and the versions in the packaging recipes disagree.
+GitHub Actions builds and tests the program, then builds, lints, installs, and smoke-tests both the `.deb` and the `.rpm` on every push and pull request. Each run uploads the static binary and both packages as downloadable artifacts. Pushing a `v*` tag attaches those packages to the matching GitHub release. `scripts/check-versions.sh` fails the build when the version in `main.go` and the versions in the packaging recipes disagree.
 
 ## License
 

@@ -39,10 +39,24 @@ jobs:
         run: go test -mod=vendor ./...
 
       - name: Build
-        run: go build -mod=vendor -trimpath -o soloistd .
+        # Statically linked, so the published binary runs on any Linux
+        # distribution. The package jobs below cover the dynamic PIE build
+        # that each distribution expects of its own package.
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p dist
+          go build -mod=vendor -trimpath -ldflags '-s -w' -o dist/soloistd-linux-amd64 .
+          ./dist/soloistd-linux-amd64 version
 
       - name: Check packaging versions
         run: ./scripts/check-versions.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: soloistd-linux-amd64
+          path: dist/soloistd-linux-amd64
+          if-no-files-found: error
 
   deb:
     name: Debian package
@@ -143,4 +157,7 @@ jobs:
         run: |
           gh release view "$TAG" >/dev/null 2>&1 ||
             gh release create "$TAG" --title "$TAG" --generate-notes
-          gh release upload "$TAG" dist/soloistd_*.deb dist/soloistd-[0-9]*.rpm --clobber
+          gh release upload "$TAG" \
+            dist/soloistd-linux-amd64 \
+            dist/soloistd_*.deb \
+            dist/soloistd-[0-9]*.rpm --clobber
