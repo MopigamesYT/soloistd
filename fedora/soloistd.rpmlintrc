@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: 0BSD
+
+# "systemd" is the correct spelling of the init system's name, but it is not in
+# rpmlint's dictionary, so it trips the spell checker in %description.
+addFilter("spelling-error .*systemd")

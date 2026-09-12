@@ -101,7 +101,7 @@ jobs:
     container: fedora:latest
     steps:
       - name: Install build dependencies
-        run: dnf -y install rpm-build rpmdevtools rpmlint golang gcc git
+        run: dnf -y install rpm-build rpmdevtools rpmlint glibc-langpack-en golang gcc git
 
       - uses: actions/checkout@v4
 
@@ -122,7 +122,7 @@ jobs:
 
       - name: Lint package
         continue-on-error: true
-        run: rpmlint dist/*.rpm fedora/soloistd.spec
+        run: rpmlint --ignore-unused-rpmlintrc -r fedora/soloistd.rpmlintrc dist/*.rpm fedora/soloistd.spec
 
       - name: Smoke test
         run: |
