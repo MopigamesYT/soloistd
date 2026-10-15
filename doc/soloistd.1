@@ -38,6 +38,22 @@ executing
 atomically replaces its user\-owned copy of the executable, and restarts
 Soloist gracefully. A failed check never interrupts playback.
 .PP
+The restart onto a new build waits until playback is paused or idle.
+.B soloistd
+asks
+.B "soloist ctl now"
+for the playback state once a minute, so it starts Soloist with the WebSocket
+API on a loopback port chosen by the system unless
+.B websocket
+is set in
+.IR config.json .
+Setting
+.B websocket
+to
+.B off
+disables the API, and updates then restart Soloist immediately.
+Music that never pauses keeps the old build until it expires.
+.PP
 Spotify documents daemon exit status 10 as "build expired". That remains an
 independent fallback: the current build is downloaded and Soloist restarted
 whenever status 10 is reported, even if the metadata check failed.

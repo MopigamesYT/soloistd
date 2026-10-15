@@ -200,18 +200,19 @@ func (a app) ctl(ctx context.Context, args []string) error {
 	if err := a.ensureBinary(ctx, p); err != nil {
 		return err
 	}
-	dataDir := cfg.DataDir
-	if dataDir == "" {
-		dataDir = p.soloistData
-	}
-	ctlArgs := append([]string{"ctl"}, args...)
-	ctlArgs = append(ctlArgs, "--data-dir", dataDir)
-	cmd := exec.CommandContext(ctx, p.soloistBinary(), ctlArgs...)
+	cmd := ctlCommand(ctx, p, cfg, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = a.stdin, a.stdout, a.stderr
 	if err := cmd.Run(); err != nil {
 		return &commandError{code: exitStatus(err), err: nil}
 	}
 	return nil
+}
+
+// ctlCommand builds a soloist ctl invocation against the managed data directory.
+func ctlCommand(ctx context.Context, p paths, cfg config, args ...string) *exec.Cmd {
+	ctlArgs := append([]string{"ctl"}, args...)
+	ctlArgs = append(ctlArgs, "--data-dir", cfg.dataDir(p))
+	return exec.CommandContext(ctx, p.soloistBinary(), ctlArgs...)
 }
 
 func configuredPaths() (paths, config, error) {

@@ -3,11 +3,22 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+)
+
+// defaultWebSocket enables Soloist's WebSocket API on a loopback port chosen by
+// the OS when config.json sets no websocket address. soloist ctl, which the
+// supervisor uses to defer update restarts while music plays, needs it.
+// Setting websocket to webSocketOff disables the API, and updates then restart
+// Soloist immediately.
+const (
+	defaultWebSocket = "127.0.0.1:0"
+	webSocketOff     = "off"
 )
 
 type config struct {
@@ -97,11 +108,11 @@ func saveConfig(p paths, cfg config) error {
 	return os.Chmod(p.configFile, 0o600)
 }
 
+func (cfg config) dataDir(p paths) string {
+	return cmp.Or(cfg.DataDir, p.soloistData)
+}
+
 func (cfg config) soloistArgs(p paths) []string {
-	dataDir := cfg.DataDir
-	if dataDir == "" {
-		dataDir = p.soloistData
-	}
 	cacheDir := cfg.CacheDir
 	if cacheDir == "" {
 		cacheDir = p.soloistCache
@@ -109,7 +120,7 @@ func (cfg config) soloistArgs(p paths) []string {
 	args := []string{
 		"--device-name", cfg.DeviceName,
 		"--api-key", cfg.APIKey,
-		"--data-dir", dataDir,
+		"--data-dir", cfg.dataDir(p),
 		"--cache-dir", cacheDir,
 	}
 	if cfg.CacheSizeMB != nil {
@@ -121,8 +132,12 @@ func (cfg config) soloistArgs(p paths) []string {
 	if cfg.InitialVolume != nil {
 		args = append(args, "--initial-volume", fmt.Sprint(*cfg.InitialVolume))
 	}
-	if cfg.WebSocket != "" {
-		args = append(args, "--ws", cfg.WebSocket)
+	if cfg.webSocketEnabled() {
+		args = append(args, "--ws", cmp.Or(cfg.WebSocket, defaultWebSocket))
 	}
 	return args
+}
+
+func (cfg config) webSocketEnabled() bool {
+	return cfg.WebSocket != webSocketOff
 }

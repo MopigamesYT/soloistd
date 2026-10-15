@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -54,17 +55,38 @@ func TestSoloistArgs(t *testing.T) {
 		CacheSizeMB:    &cacheSize,
 		PipewireDevice: "sink-1",
 		InitialVolume:  &volume,
-		WebSocket:      "127.0.0.1:0",
+		WebSocket:      "127.0.0.1:8765",
 	}
 	p := paths{soloistData: "/data/soloist", soloistCache: "/cache/soloist"}
 	want := []string{
 		"--device-name", "Bedroom", "--api-key", "secret",
 		"--data-dir", "/data/soloist", "--cache-dir", "/cache/soloist",
 		"--cache-size", "500", "--pipewire-device", "sink-1",
-		"--initial-volume", "42", "--ws", "127.0.0.1:0",
+		"--initial-volume", "42", "--ws", "127.0.0.1:8765",
 	}
 	if got := cfg.soloistArgs(p); !reflect.DeepEqual(got, want) {
 		t.Fatalf("soloistArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestSoloistArgsEnablesLoopbackWebSocketByDefault(t *testing.T) {
+	cfg := config{DeviceName: "Bedroom", APIKey: "secret"}
+	p := paths{soloistData: "/data/soloist", soloistCache: "/cache/soloist"}
+	want := []string{
+		"--device-name", "Bedroom", "--api-key", "secret",
+		"--data-dir", "/data/soloist", "--cache-dir", "/cache/soloist",
+		"--ws", "127.0.0.1:0",
+	}
+	if got := cfg.soloistArgs(p); !reflect.DeepEqual(got, want) {
+		t.Fatalf("soloistArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestSoloistArgsWebSocketOff(t *testing.T) {
+	cfg := config{DeviceName: "Bedroom", APIKey: "secret", WebSocket: "off"}
+	p := paths{soloistData: "/data/soloist", soloistCache: "/cache/soloist"}
+	if got := cfg.soloistArgs(p); slices.Contains(got, "--ws") {
+		t.Fatalf("soloistArgs() = %#v, want no --ws", got)
 	}
 }
 
