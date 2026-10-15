@@ -105,6 +105,8 @@ Additional documented Soloist options can be set directly in `config.json`: `dat
 
 `soloistd` compares the official archive's CDN metadata at daemon startup and every six hours. When the archive changes, it downloads the stable archive matching the current Linux architecture from `soloist-builds.spotifycdn.com`, extracts and executes `soloist --version` as validation, atomically replaces its user-owned managed executable, and gracefully restarts Soloist. Failed proactive checks do not interrupt playback.
 
+The restart onto a new build waits until playback is paused or idle. `soloistd` asks `soloist ctl now` for the playback state once a minute. To make that possible, it starts Soloist with the WebSocket API on `127.0.0.1` with a port chosen by the system, unless `websocket` in `config.json` sets a different address. Set `"websocket": "off"` to disable the WebSocket API; updates then restart Soloist immediately. Music that never pauses keeps the old build until it expires, and the exit-status-`10` fallback below then updates it.
+
 Spotify documents daemon exit status `10` as “build expired.” This remains an independent fallback: `soloistd` unconditionally downloads the current build and restarts whenever Soloist reports status `10`, even if the proactive metadata check failed. It supports `x86_64`, AArch64, and ARMv7.
 
 ## Packaging and CI

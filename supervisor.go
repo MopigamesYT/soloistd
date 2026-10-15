@@ -3,15 +3,25 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 )
 
-var updateCheckInterval = 6 * time.Hour
+var (
+	updateCheckInterval = 6 * time.Hour
+	restartPollInterval = time.Minute
+)
+
+// ctlTimeout bounds a single soloist ctl call so a hung daemon cannot stall
+// the supervisor loop.
+const ctlTimeout = 10 * time.Second
 
 type updateResult struct {
 	updated bool
@@ -36,10 +46,15 @@ func (a app) runDaemon(ctx context.Context, args []string) error {
 	daemonCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	updates := a.watchForUpdates(daemonCtx, p)
+	restartReady := func(ctx context.Context) bool { return a.playbackIdle(ctx, p, cfg) }
+	if !cfg.webSocketEnabled() {
+		// Without the WebSocket API ctl cannot see playback; restart right away.
+		restartReady = func(context.Context) bool { return true }
+	}
 
 	var lastExpiryRefresh time.Time
 	for {
-		code, err, updated := a.runSoloistOnce(daemonCtx, p.soloistBinary(), cfg.soloistArgs(p), updates)
+		code, err, updated := a.runSoloistOnce(daemonCtx, p.soloistBinary(), cfg.soloistArgs(p), updates, restartReady)
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -87,7 +102,11 @@ func (a app) watchForUpdates(ctx context.Context, p paths) <-chan updateResult {
 	return results
 }
 
-func (a app) runSoloistOnce(ctx context.Context, binary string, args []string, updates <-chan updateResult) (int, error, bool) {
+// runSoloistOnce runs Soloist until it exits or ctx is canceled. Once an update
+// has been installed, it polls restartReady and restarts Soloist only when that
+// reports that a restart will not interrupt playback. A build that never
+// becomes idle is replaced at the latest when it expires (exit 10).
+func (a app) runSoloistOnce(ctx context.Context, binary string, args []string, updates <-chan updateResult, restartReady func(context.Context) bool) (int, error, bool) {
 	cmd := exec.Command(binary, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = a.stdin, a.stdout, a.stderr
 	if err := cmd.Start(); err != nil {
@@ -96,6 +115,7 @@ func (a app) runSoloistOnce(ctx context.Context, binary string, args []string, u
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 
+	var poll <-chan time.Time
 	for {
 		select {
 		case err := <-done:
@@ -105,14 +125,56 @@ func (a app) runSoloistOnce(ctx context.Context, binary string, args []string, u
 				fmt.Fprintf(a.stderr, "soloistd: update check failed; continuing with installed build: %v\n", result.err)
 				continue
 			}
-			if !result.updated {
+			if !result.updated || poll != nil {
 				continue
 			}
-			return stopSoloist(cmd, done, nil, true)
+			if restartReady(ctx) {
+				return stopSoloist(cmd, done, nil, true)
+			}
+			fmt.Fprintln(a.stdout, "New Soloist build installed; restarting once playback is paused or idle.")
+			poll = time.Tick(restartPollInterval)
+		case <-poll:
+			if restartReady(ctx) {
+				return stopSoloist(cmd, done, nil, true)
+			}
 		case <-ctx.Done():
 			return stopSoloist(cmd, done, ctx.Err(), false)
 		}
 	}
+}
+
+// playbackIdle reports whether restarting Soloist would not interrupt playback,
+// according to soloist ctl. When the state cannot be determined, it reports
+// false so the restart is deferred to the next poll.
+func (a app) playbackIdle(ctx context.Context, p paths, cfg config) bool {
+	ctx, cancel := context.WithTimeout(ctx, ctlTimeout)
+	defer cancel()
+	// After an update this is the new build on disk talking to the old daemon
+	// over the WebSocket API.
+	cmd := ctlCommand(ctx, p, cfg, "now", "--json")
+	var out, errOut bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errOut
+	if err := cmd.Run(); err != nil {
+		// Exit 3 covers every server error. Only a missing login means nothing
+		// can be playing; other errors say nothing about playback.
+		return exitStatus(err) == 3 && reportsLoggedOut(errOut.String())
+	}
+	var state struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &state); err != nil {
+		return false
+	}
+	return state.Status == "idle" || state.Status == "paused"
+}
+
+// reportsLoggedOut matches soloist ctl's error output for a daemon without a
+// Spotify session. The exact wording is undocumented, so it matches loosely.
+func reportsLoggedOut(stderr string) bool {
+	stderr = strings.ToLower(stderr)
+	return strings.Contains(stderr, "logged in") ||
+		strings.Contains(stderr, "login") ||
+		strings.Contains(stderr, "authentication")
 }
 
 func stopSoloist(cmd *exec.Cmd, done <-chan error, returnErr error, updated bool) (int, error, bool) {

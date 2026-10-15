@@ -142,7 +142,7 @@ func TestRunDaemonPeriodicallyUpdatesAndRestarts(t *testing.T) {
 	if err != nil {
 		t.Skip(err)
 	}
-	newBinary := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'soloist periodic build'; exit 0; fi\necho 'new build ran'\nexit 0\n")
+	newBinary := []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'soloist periodic build'; exit 0; fi\nif [ \"$1\" = \"ctl\" ]; then echo '{\"status\":\"paused\"}'; exit 0; fi\necho 'new build ran'\nexit 0\n")
 	downloadBody := makeArchive(t, newBinary)
 	headCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -196,6 +196,72 @@ func TestRunDaemonPeriodicallyUpdatesAndRestarts(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Restarting Soloist with the new build") || !strings.Contains(stdout.String(), "new build ran") {
 		t.Fatalf("stdout does not show update restart:\n%s\nstderr:\n%s", stdout.String(), stderr.String())
+	}
+}
+
+func TestRunSoloistOnceDefersRestartWhilePlaying(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Soloist is Linux-only")
+	}
+	oldInterval := restartPollInterval
+	restartPollInterval = 10 * time.Millisecond
+	defer func() { restartPollInterval = oldInterval }()
+
+	binary := filepath.Join(t.TempDir(), "soloist")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\ntrap 'exit 0' TERM\nwhile :; do sleep 0.01; done\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	updates := make(chan updateResult, 1)
+	updates <- updateResult{updated: true}
+	checks := 0
+	restartReady := func(context.Context) bool {
+		checks++
+		return checks > 3
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	a := app{stdin: strings.NewReader(""), stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}.synchronizedWriters()
+	_, err, updated := a.runSoloistOnce(ctx, binary, nil, updates, restartReady)
+	if err != nil || !updated {
+		t.Fatalf("runSoloistOnce() err=%v updated=%v, want nil and true", err, updated)
+	}
+	if checks != 4 {
+		t.Fatalf("restartReady called %d times, want 4", checks)
+	}
+}
+
+func TestPlaybackIdle(t *testing.T) {
+	tests := []struct {
+		name   string
+		script string
+		want   bool
+	}{
+		{"playing", `echo '{"type":"playback_state","status":"playing"}'`, false},
+		{"buffering", `echo '{"status":"buffering"}'`, false},
+		{"paused", `echo '{"status":"paused"}'`, true},
+		{"idle", `echo '{"status":"idle"}'`, true},
+		{"not logged in", `echo 'error: not logged in' >&2; exit 3`, true},
+		{"requires authentication", `echo 'command requires authentication' >&2; exit 3`, true},
+		{"other server error", `echo 'error: no response' >&2; exit 3`, false},
+		{"connection failed", `exit 2`, false},
+		{"garbage", `echo 'garbage'`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := testPaths(t)
+			if err := os.MkdirAll(filepath.Dir(p.soloistBinary()), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			script := "#!/bin/sh\n[ \"$1 $2 $3 $4\" = \"ctl now --json --data-dir\" ] || exit 1\n" + tt.script + "\n"
+			if err := os.WriteFile(p.soloistBinary(), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			a := app{stdin: strings.NewReader(""), stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}
+			if got := a.playbackIdle(t.Context(), p, config{}); got != tt.want {
+				t.Fatalf("playbackIdle() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
