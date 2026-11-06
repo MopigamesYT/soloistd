@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+//go:build linux
 
 package main
 
@@ -46,10 +47,10 @@ func (a app) installService(ctx context.Context) error {
 		return err
 	}
 	unit := serviceUnit(executable)
-	if err := ensureParent(p.unitFile, 0o755); err != nil {
+	if err := ensureParent(p.serviceFile, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(p.unitFile, []byte(unit), 0o644); err != nil {
+	if err := os.WriteFile(p.serviceFile, []byte(unit), 0o644); err != nil {
 		return fmt.Errorf("write user service: %w", err)
 	}
 	if err := a.systemctl(ctx, "daemon-reload"); err != nil {
@@ -58,28 +59,8 @@ func (a app) installService(ctx context.Context) error {
 	if err := a.systemctl(ctx, "enable", "--now", serviceName); err != nil {
 		return err
 	}
-	fmt.Fprintf(a.stdout, "Installed and started %s\n", p.unitFile)
+	fmt.Fprintf(a.stdout, "Installed and started %s\n", p.serviceFile)
 	return nil
-}
-
-func serviceUnit(executable string) string {
-	return `[Unit]
-Description=Spotify Soloist daemon
-Documentation=https://developer.spotify.com/documentation/soloist
-After=network-online.target pipewire.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=` + quoteSystemdArg(executable) + ` run
-Restart=on-failure
-RestartSec=60s
-UMask=0077
-NoNewPrivileges=true
-
-[Install]
-WantedBy=default.target
-`
 }
 
 func (a app) uninstallService(ctx context.Context) error {
@@ -88,7 +69,7 @@ func (a app) uninstallService(ctx context.Context) error {
 		return err
 	}
 	_ = a.systemctl(ctx, "disable", "--now", serviceName)
-	if err := os.Remove(p.unitFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(p.serviceFile); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove user service: %w", err)
 	}
 	if err := a.systemctl(ctx, "daemon-reload"); err != nil {

@@ -29,21 +29,23 @@ type releaseMetadata struct {
 	ContentLength int64  `json:"content_length,omitempty"`
 }
 
-func archiveName(goarch string) (string, error) {
-	switch goarch {
-	case "amd64":
+func archiveName(goos, goarch string) (string, error) {
+	switch {
+	case goos == "linux" && goarch == "amd64":
 		return "soloist_release_x86_64.tar.gz", nil
-	case "arm64":
+	case goos == "linux" && goarch == "arm64":
 		return "soloist_release_arm64.tar.gz", nil
-	case "arm":
+	case goos == "linux" && goarch == "arm":
 		return "soloist_release_arm32.tar.gz", nil
+	case goos == "darwin" && goarch == "arm64":
+		return "soloist_release_osx_arm64.tar.gz", nil
 	default:
-		return "", fmt.Errorf("Soloist has no Linux download for architecture %q", goarch)
+		return "", fmt.Errorf("Soloist has no download for %s/%s", goos, goarch)
 	}
 }
 
 func (a app) installLatest(ctx context.Context, p paths) error {
-	archive, err := archiveName(runtime.GOARCH)
+	archive, err := archiveName(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return err
 	}
@@ -58,7 +60,7 @@ func (a app) installLatest(ctx context.Context, p paths) error {
 	defer os.RemoveAll(tmpDir)
 
 	url := downloadBaseURL + archive
-	fmt.Fprintf(a.stdout, "Downloading current Spotify Soloist build for %s...\n", runtime.GOARCH)
+	fmt.Fprintf(a.stdout, "Downloading current Spotify Soloist build for %s/%s...\n", runtime.GOOS, runtime.GOARCH)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -112,7 +114,7 @@ func (a app) installLatest(ctx context.Context, p paths) error {
 }
 
 func (a app) checkForUpdate(ctx context.Context, p paths) (bool, error) {
-	archive, err := archiveName(runtime.GOARCH)
+	archive, err := archiveName(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return false, err
 	}

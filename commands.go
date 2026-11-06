@@ -13,8 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"golang.org/x/sys/unix"
 )
 
 func (a app) setup(ctx context.Context, args []string) error {
@@ -114,26 +112,6 @@ func readLineContext(ctx context.Context, reader *bufio.Reader) (string, error) 
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
-}
-
-func readPasswordContext(ctx context.Context, input *os.File) ([]byte, error) {
-	fd := int(input.Fd())
-	state, err := unix.IoctlGetTermios(fd, unix.TCGETS)
-	if err != nil {
-		return nil, err
-	}
-	noEcho := *state
-	noEcho.Lflag &^= unix.ECHO
-	if err := unix.IoctlSetTermios(fd, unix.TCSETS, &noEcho); err != nil {
-		return nil, err
-	}
-	defer unix.IoctlSetTermios(fd, unix.TCSETS, state)
-
-	line, err := readLineContext(ctx, bufio.NewReader(input))
-	if err != nil {
-		return nil, err
-	}
-	return []byte(strings.TrimRight(line, "\r\n")), nil
 }
 
 func defaultDeviceName(hostname string) string {

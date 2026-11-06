@@ -8,25 +8,28 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestArchiveName(t *testing.T) {
 	tests := map[string]string{
-		"amd64": "soloist_release_x86_64.tar.gz",
-		"arm64": "soloist_release_arm64.tar.gz",
-		"arm":   "soloist_release_arm32.tar.gz",
+		"linux/amd64":  "soloist_release_x86_64.tar.gz",
+		"linux/arm64":  "soloist_release_arm64.tar.gz",
+		"linux/arm":    "soloist_release_arm32.tar.gz",
+		"darwin/arm64": "soloist_release_osx_arm64.tar.gz",
 	}
-	for arch, want := range tests {
-		got, err := archiveName(arch)
+	for platform, want := range tests {
+		parts := strings.Split(platform, "/")
+		got, err := archiveName(parts[0], parts[1])
 		if err != nil {
-			t.Fatalf("archiveName(%q): %v", arch, err)
+			t.Fatalf("archiveName(%q): %v", platform, err)
 		}
 		if got != want {
-			t.Fatalf("archiveName(%q) = %q, want %q", arch, got, want)
+			t.Fatalf("archiveName(%q) = %q, want %q", platform, got, want)
 		}
 	}
-	if _, err := archiveName("riscv64"); err == nil {
+	if _, err := archiveName("darwin", "amd64"); err == nil {
 		t.Fatal("expected unsupported architecture to fail")
 	}
 }
