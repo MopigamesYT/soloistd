@@ -19,10 +19,10 @@ import (
 )
 
 func TestRunDaemonRefreshesExitTenAndRestarts(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Soloist is Linux-only")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("Soloist is unsupported on this platform")
 	}
-	archive, err := archiveName(runtime.GOARCH)
+	archive, err := archiveName(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		t.Skip(err)
 	}
@@ -82,7 +82,7 @@ func TestRunDaemonRefreshesExitTenAndRestarts(t *testing.T) {
 }
 
 func TestCheckForUpdateDownloadsOnlyChangedRelease(t *testing.T) {
-	archive, err := archiveName(runtime.GOARCH)
+	archive, err := archiveName(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		t.Skip(err)
 	}
@@ -135,10 +135,10 @@ func TestCheckForUpdateDownloadsOnlyChangedRelease(t *testing.T) {
 }
 
 func TestRunDaemonPeriodicallyUpdatesAndRestarts(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Soloist is Linux-only")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("Soloist is unsupported on this platform")
 	}
-	archive, err := archiveName(runtime.GOARCH)
+	archive, err := archiveName(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		t.Skip(err)
 	}
@@ -245,7 +245,7 @@ func testPaths(t *testing.T) paths {
 }
 
 func Example_archiveName() {
-	name, _ := archiveName("amd64")
+	name, _ := archiveName("linux", "amd64")
 	fmt.Println(name)
 	// Output: soloist_release_x86_64.tar.gz
 }

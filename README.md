@@ -1,10 +1,10 @@
 # soloistd
 
-`soloistd` is a small supervisor for [Spotify Soloist](https://developer.spotify.com/documentation/soloist). It stores the API key outside the systemd unit, runs Soloist as a systemd user service, proactively checks for official updates, and retains build-expiry recovery as a fallback.
+`soloistd` is a small supervisor for [Spotify Soloist](https://developer.spotify.com/documentation/soloist). It stores the API key outside the service definition, runs Soloist as a systemd user service on Linux or a LaunchAgent on Apple Silicon macOS, proactively checks for official updates, and retains build-expiry recovery as a fallback.
 
 ## Install
 
-Every tagged release carries a statically linked `soloistd-linux-amd64` binary, a `.deb`, and an `.rpm`, all built by CI. Install the package matching the distribution with `apt install ./soloistd_*.deb` or `dnf install ./soloistd-*.rpm`, or just put the static binary on your `PATH`.
+Every tagged release carries `soloistd-linux-amd64`, `soloistd-darwin-arm64`, a `.deb`, and an `.rpm`, all built by CI. Install the package matching the distribution with `apt install ./soloistd_*.deb` or `dnf install ./soloistd-*.rpm`, or put the binary for your platform on your `PATH`.
 
 ### Arch Linux (AUR)
 
@@ -37,6 +37,10 @@ rpmbuild -bb fedora/soloistd.spec
 sudo dnf install ~/rpmbuild/RPMS/*/soloistd-*.rpm
 ```
 
+### Apple Silicon macOS
+
+Download `soloistd-darwin-arm64` from the release and install it somewhere permanent on your `PATH`. macOS uses a per-user LaunchAgent and requires a graphical login session. Intel Macs are unsupported because Spotify provides Soloist only for Apple Silicon.
+
 ### From source
 
 Build and place `soloistd` somewhere permanent on your `PATH`:
@@ -60,7 +64,7 @@ Alternatively, keep the key out of shell history with an environment variable:
 SOLOIST_API_KEY='your-key' soloistd setup --device-name "Kitchen speaker"
 ```
 
-Install and immediately start the systemd user service:
+Install and immediately start the user service:
 
 ```sh
 soloistd service install
@@ -88,22 +92,23 @@ Stop the installed service before using `soloistd pair`, because Soloist permits
 
 ## Files and security
 
-| Purpose | Default path |
-| --- | --- |
-| Private configuration | `$XDG_CONFIG_HOME/soloistd/config.json` |
-| Managed Soloist binary | `$XDG_DATA_HOME/soloistd/bin/soloist` |
-| Installed release metadata | `$XDG_DATA_HOME/soloistd/release.json` |
-| Spotify session/state | `$XDG_DATA_HOME/soloist` |
-| Playback cache | `$XDG_CACHE_HOME/soloist` |
-| systemd user unit | `$XDG_CONFIG_HOME/systemd/user/soloistd.service` |
+| Purpose | Linux default path | macOS default path |
+| --- | --- | --- |
+| Private configuration | `$XDG_CONFIG_HOME/soloistd/config.json` | `~/Library/Application Support/soloistd/config.json` |
+| Managed Soloist binary | `$XDG_DATA_HOME/soloistd/bin/soloist` | `~/Library/Application Support/soloistd/bin/soloist` |
+| Installed release metadata | `$XDG_DATA_HOME/soloistd/release.json` | `~/Library/Application Support/soloistd/release.json` |
+| Spotify session/state | `$XDG_DATA_HOME/soloist` | `~/Library/Application Support/soloist` |
+| Playback cache | `$XDG_CACHE_HOME/soloist` | `~/Library/Caches/soloist` |
+| User service | `$XDG_CONFIG_HOME/systemd/user/soloistd.service` | `~/Library/LaunchAgents/com.spotify.soloistd.plist` |
+| Service log | journald | `~/Library/Logs/soloistd/soloistd.log` |
 
-The usual `~/.config`, `~/.local/share`, and `~/.cache` fallbacks are used when the XDG variables are unset. The config directory is mode `0700` and `config.json` is mode `0600`. The generated unit contains only the path to `soloistd`; it never contains the API key. Soloist itself requires the key as a command-line argument, so the key can still be visible to same-user process inspection while Soloist is running.
+On Linux, the usual `~/.config`, `~/.local/share`, and `~/.cache` fallbacks are used when the XDG variables are unset. The config directory is mode `0700` and `config.json` is mode `0600`. The generated service definition contains only the path to `soloistd`; it never contains the API key. Soloist itself requires the key as a command-line argument, so the key can still be visible to same-user process inspection while Soloist is running.
 
 Additional documented Soloist options can be set directly in `config.json`: `data_dir`, `cache_dir`, `cache_size_mb`, `pipewire_device`, `initial_volume`, and `websocket`.
 
 ## Automatic updates
 
-`soloistd` compares the official archive's CDN metadata at daemon startup and every six hours. When the archive changes, it downloads the stable archive matching the current Linux architecture from `soloist-builds.spotifycdn.com`, extracts and executes `soloist --version` as validation, atomically replaces its user-owned managed executable, and gracefully restarts Soloist. Failed proactive checks do not interrupt playback.
+`soloistd` compares the official archive's CDN metadata at daemon startup and every six hours. When the archive changes, it downloads the stable archive matching the current platform and architecture from `soloist-builds.spotifycdn.com`, extracts and executes `soloist --version` as validation, atomically replaces its user-owned managed executable, and gracefully restarts Soloist. Failed proactive checks do not interrupt playback.
 
 Spotify documents daemon exit status `10` as “build expired.” This remains an independent fallback: `soloistd` unconditionally downloads the current build and restarts whenever Soloist reports status `10`, even if the proactive metadata check failed. It supports `x86_64`, AArch64, and ARMv7.
 

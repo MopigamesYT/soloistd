@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 type paths struct {
@@ -12,13 +13,26 @@ type paths struct {
 	managerData  string
 	soloistData  string
 	soloistCache string
-	unitFile     string
+	serviceFile  string
+	logFile      string
 }
 
 func resolvePaths() (paths, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return paths{}, err
+	}
+
+	if runtime.GOOS == "darwin" {
+		applicationSupport := filepath.Join(home, "Library", "Application Support")
+		return paths{
+			configFile:   filepath.Join(applicationSupport, "soloistd", "config.json"),
+			managerData:  filepath.Join(applicationSupport, "soloistd"),
+			soloistData:  filepath.Join(applicationSupport, "soloist"),
+			soloistCache: filepath.Join(home, "Library", "Caches", "soloist"),
+			serviceFile:  filepath.Join(home, "Library", "LaunchAgents", "com.spotify.soloistd.plist"),
+			logFile:      filepath.Join(home, "Library", "Logs", "soloistd", "soloistd.log"),
+		}, nil
 	}
 
 	configHome := os.Getenv("XDG_CONFIG_HOME")
@@ -39,7 +53,7 @@ func resolvePaths() (paths, error) {
 		managerData:  filepath.Join(dataHome, "soloistd"),
 		soloistData:  filepath.Join(dataHome, "soloist"),
 		soloistCache: filepath.Join(cacheHome, "soloist"),
-		unitFile:     filepath.Join(configHome, "systemd", "user", "soloistd.service"),
+		serviceFile:  filepath.Join(configHome, "systemd", "user", "soloistd.service"),
 	}, nil
 }
 
